@@ -46,67 +46,60 @@ def normalize_text(text: str) -> str:
 # 3. ARTICLE SPLITTER (ROBUST)
 # -----------------------------
 def split_articles(text: str):
+
     text = normalize_text(text)
 
-    # More flexible patterns (real-world PDFs are messy)
-    patterns = [
-        r"(?:^|\n)\s*المادة\s*[\(\[]?\s*(\d+)\s*[\)\]]?",
-        r"(?:^|\n)\s*مادة\s*[\(\[]?\s*(\d+)\s*[\)\]]?",
-        r"(?:^|\n)\s*Article\s*[:\-]?\s*(\d+)",
-    ]
+    text = re.sub(
+        r"الجر[یي]دة\s+الرسم[یي]ة.*?\n",
+        "\n",
+        text,
+        flags=re.IGNORECASE
+    )
 
-    matches = []
+    text = re.sub(
+        r"العدد\s+\d+.*?\n",
+        "\n",
+        text,
+        flags=re.IGNORECASE
+    )
 
-    for pattern in patterns:
-        for match in re.finditer(pattern, text, re.IGNORECASE):
-            matches.append({
-                "number": match.group(1),
-                "start": match.start()
-            })
+    pattern = re.compile(
+        r"(?:^|\n)\s*(?:المادة|مادة)\s*[\(\[]?\s*(\d+)\s*[\)\]]?",
+        re.MULTILINE
+    )
 
-    # If regex fails → fallback strategy (VERY IMPORTANT for Arabic PDFs)
+    matches = list(pattern.finditer(text))
+
     if not matches:
-        lines = text.split("\n")
-        for i, line in enumerate(lines):
-            if "المادة" in line or "مادة" in line or "Article" in line:
-                nums = re.findall(r"\d+", line)
-                if nums:
-                    matches.append({
-                        "number": nums[0],
-                        "start": i
-                    })
-
-        if not matches:
-            return []
-
-        # line-based reconstruction
-        articles = []
-        for i, m in enumerate(matches):
-            start = m["start"]
-            end = matches[i + 1]["start"] if i + 1 < len(matches) else len(lines)
-
-            article_text = "\n".join(lines[start:end]).strip()
-
-            articles.append({
-                "article_number": m["number"],
-                "article_text": article_text
-            })
-
-        return articles
-
-    # Sort by position (regex case)
-    matches.sort(key=lambda x: x["start"])
+        return []
 
     articles = []
 
-    for i, m in enumerate(matches):
-        start = m["start"]
-        end = matches[i + 1]["start"] if i + 1 < len(matches) else len(text)
+    for i, match in enumerate(matches):
+
+        article_number = match.group(1)
+
+        start = match.start()
+
+        end = (
+            matches[i + 1].start()
+            if i + 1 < len(matches)
+            else len(text)
+        )
 
         article_text = text[start:end].strip()
 
+        article_text = re.sub(
+            r"\s+",
+            " ",
+            article_text
+        )
+
+        if len(article_text) < 30:
+            continue
+
         articles.append({
-            "article_number": m["number"],
+            "article_number": article_number,
             "article_text": article_text
         })
 
